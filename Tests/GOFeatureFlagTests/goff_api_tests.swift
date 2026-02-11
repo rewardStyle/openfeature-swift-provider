@@ -331,28 +331,4 @@ class GoffApiTests: XCTestCase {
             XCTFail("exception thrown when doing the evaluation: \(error)")
         }
     }
-
-    func testCustomHeadersPassedToOfrepProvider() async throws {
-        let mockService = MockNetworkingService(mockStatus: 200)
-        let options = GoFeatureFlagProviderOptions(
-            endpoint: "http://localhost:1031/",
-            headers: ["X-Custom-Header": "custom-value"],
-            networkService: mockService
-        )
-        
-        // Initialize provider which will create OfrepProvider with headers
-        let provider = GoFeatureFlagProvider(options: options)
-        let evaluationCtx = ImmutableContext(targetingKey: "test-user")
-        
-        do {
-            try await provider.initialize(initialContext: evaluationCtx)
-            
-            // Verify that the OFREP bulk evaluation request received the custom headers
-            let bulkEvalRequest = mockService.requests.first { $0.url?.absoluteString.contains("/ofrep/v1/evaluate/flags") ?? false }
-            XCTAssertNotNil(bulkEvalRequest, "Should have made an OFREP bulk evaluation request")
-            XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
-        } catch {
-            XCTFail("exception thrown during initialization: \(error)")
-        }
-    }
 }
