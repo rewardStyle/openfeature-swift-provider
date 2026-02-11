@@ -44,6 +44,11 @@ class GoFeatureFlagAPI {
             "application/json",
             forHTTPHeaderField: "Content-Type"
         )
+        if let customHeaders = self.options.headers {
+            for (key, value) in customHeaders {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+        }
         if let apiKey = self.options.apiKey {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField:"Authorization")
         }

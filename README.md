@@ -79,6 +79,58 @@ If you prefer to wait until the fetch is done you can use the `async/await` comp
 await OpenFeatureAPI.shared.setProviderAndWait(provider: provider)
 ```
 
+### Configure Custom HTTP Headers
+
+You can configure custom HTTP headers to be sent with all requests to the GO Feature Flag relay-proxy. This is useful for scenarios requiring:
+- Custom authorization schemes (Basic auth, custom tokens, etc.)
+- Additional headers (API versions, tenant identifiers, etc.)
+- Any other custom HTTP headers your relay-proxy requires
+
+#### Using Custom Headers
+
+```swift
+let options = GoFeatureFlagProviderOptions(
+    endpoint: "https://your_domain.io",
+    headers: [
+        "X-Custom-Header": "custom-value",
+        "X-Tenant-Id": "tenant-123"
+    ]
+)
+let provider = GoFeatureFlagProvider(options: options)
+```
+
+#### Using API Key (Bearer Token)
+
+For convenience, you can use the `apiKey` parameter which automatically adds an `Authorization: Bearer {token}` header:
+
+```swift
+let options = GoFeatureFlagProviderOptions(
+    endpoint: "https://your_domain.io",
+    apiKey: "your-api-key"
+)
+let provider = GoFeatureFlagProvider(options: options)
+```
+
+#### Combining API Key and Custom Headers
+
+You can use both `apiKey` and `headers` together. If both specify an `Authorization` header, the `apiKey` takes precedence:
+
+```swift
+let options = GoFeatureFlagProviderOptions(
+    endpoint: "https://your_domain.io",
+    apiKey: "your-api-key",
+    headers: [
+        "X-Custom-Header": "custom-value",
+        "X-Tenant-Id": "tenant-123"
+    ]
+)
+let provider = GoFeatureFlagProvider(options: options)
+// The Authorization header will be: "Bearer your-api-key"
+// Additional headers X-Custom-Header and X-Tenant-Id will also be sent
+```
+
+**Note:** Custom headers are applied to both OFREP API requests (flag evaluations) and data collector requests (usage analytics).
+
 ### Update the Evaluation Context
 
 During the usage of your application it may appears that the `EvaluationContext` should be updated. For example if a not logged in user, authentify himself you will probably have to update the evaluation context.

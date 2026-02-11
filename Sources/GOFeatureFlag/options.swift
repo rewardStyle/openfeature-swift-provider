@@ -21,6 +21,13 @@ public struct GoFeatureFlagProviderOptions {
      */
     public var apiKey: String?
     /**
+     * (optional) Custom HTTP headers to be sent with all requests to the relay proxy.
+     * These headers will be applied to both OFREP API requests and data collector requests.
+     * If both apiKey and a custom "Authorization" header are set, apiKey takes precedence.
+     * Default: nil
+     */
+    public var headers: [String:String]?
+    /**
      * (optional) interval time we publish statistics collection data to the proxy.
      * The parameter is used only if the cache is enabled, otherwise the collection of the data is done directly
      * when calling the evaluation API.
@@ -42,12 +49,14 @@ public struct GoFeatureFlagProviderOptions {
         endpoint: String,
         pollInterval: TimeInterval = 60,
         apiKey: String? = nil,
+        headers: [String:String]? = nil,
         dataFlushInterval: TimeInterval = 600,
         exporterMetadata: [String:ExporterMetadataValue]? = [:],
         networkService: NetworkingService? = URLSession.shared) {
         self.endpoint = endpoint
         self.pollInterval = pollInterval
         self.apiKey = apiKey
+        self.headers = headers
         self.networkService = networkService
         self.dataCollectorInterval = dataFlushInterval
         self.exporterMetadata = exporterMetadata

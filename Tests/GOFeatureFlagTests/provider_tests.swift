@@ -2,6 +2,7 @@ import XCTest
 import Combine
 import Foundation
 import OpenFeature
+import OFREP
 @testable import GOFeatureFlag
 
 class GoFeatureFlagProviderTests: XCTestCase {
@@ -20,12 +21,12 @@ class GoFeatureFlagProviderTests: XCTestCase {
                 networkService: mockNetworkService
             )
         )
-        let evaluationCtx = MutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
+        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
         let api = OpenFeatureAPI()
         await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
         XCTAssertEqual(api.getProviderStatus(), ProviderStatus.ready)
-        
-        
+
+
         let client = api.getClient()
         let expectation = self.expectation(description: "Waiting for delay")
         _ = client.getBooleanDetails(key: "my-flag", defaultValue: false)
@@ -41,7 +42,7 @@ class GoFeatureFlagProviderTests: XCTestCase {
         XCTAssertEqual(1, mockNetworkService.dataCollectorCallCounter)
         XCTAssertEqual(6, mockNetworkService.dataCollectorEventCounter)
     }
-    
+
     func testExporterMetadata() async {
         let mockNetworkService = MockNetworkingService(mockStatus: 200)
         let provider = GoFeatureFlagProvider(
@@ -52,7 +53,7 @@ class GoFeatureFlagProviderTests: XCTestCase {
                 networkService: mockNetworkService
             )
         )
-        let evaluationCtx = MutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
+        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
         let api = OpenFeatureAPI()
         await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
         let client = api.getClient()
@@ -71,7 +72,7 @@ class GoFeatureFlagProviderTests: XCTestCase {
 
         XCTAssertEqual(1, mockNetworkService.dataCollectorCallCounter)
         XCTAssertEqual(6, mockNetworkService.dataCollectorEventCounter)
-        
+
         do {
             let httpBodyCollector = mockNetworkService.requests[mockNetworkService.requests.count - 1].httpBody!
             let decodedStruct = try JSONDecoder().decode(DataCollectorRequest.self, from: httpBodyCollector)
@@ -87,7 +88,7 @@ class GoFeatureFlagProviderTests: XCTestCase {
             XCTFail("Error deserializing: \(error)")
         }
     }
-    
+
     func testExporterMetadataNil() async {
         let mockNetworkService = MockNetworkingService(mockStatus: 200)
         let provider = GoFeatureFlagProvider(
@@ -98,7 +99,7 @@ class GoFeatureFlagProviderTests: XCTestCase {
                 networkService: mockNetworkService
             )
         )
-        let evaluationCtx = MutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
+        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
         let api = OpenFeatureAPI()
         await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
         let client = api.getClient()
@@ -117,7 +118,7 @@ class GoFeatureFlagProviderTests: XCTestCase {
 
         XCTAssertEqual(1, mockNetworkService.dataCollectorCallCounter)
         XCTAssertEqual(6, mockNetworkService.dataCollectorEventCounter)
-        
+
         do {
             let httpBodyCollector = mockNetworkService.requests[mockNetworkService.requests.count - 1].httpBody!
             let decodedStruct = try JSONDecoder().decode(DataCollectorRequest.self, from: httpBodyCollector)
@@ -140,7 +141,7 @@ class GoFeatureFlagProviderTests: XCTestCase {
                 networkService: mockNetworkService
             )
         )
-        let evaluationCtx = MutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
+        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
         let api = OpenFeatureAPI()
         await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
         let client = api.getClient()
@@ -177,7 +178,7 @@ class GoFeatureFlagProviderTests: XCTestCase {
                 networkService: mockNetworkService
             )
         )
-        let evaluationCtx = MutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
+        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
         let api = OpenFeatureAPI()
         await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
         let client = api.getClient()
