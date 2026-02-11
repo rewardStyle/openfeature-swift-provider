@@ -254,4 +254,105 @@ class GoffApiTests: XCTestCase {
             XCTFail("exception thrown when doing the evaluation: \(error)")
         }
     }
+
+    func testHeadersOnlyConfiguration() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            headers: ["X-Custom-Header": "custom-value", "X-Api-Version": "v1"]
+        )
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        do {
+            _ = try await goffAPI.postDataCollector(events: events)
+            
+            let dataCollectorRequest = mockService.requests.first { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
+            XCTAssertNotNil(dataCollectorRequest)
+            XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
+            XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Api-Version"], "v1")
+            XCTAssertNil(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"])
+        } catch {
+            XCTFail("exception thrown when doing the evaluation: \(error)")
+        }
+    }
+
+    func testApiKeyOnlyConfiguration() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            apiKey: "apiKey1"
+        )
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        do {
+            _ = try await goffAPI.postDataCollector(events: events)
+            
+            let dataCollectorRequest = mockService.requests.first { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
+            XCTAssertNotNil(dataCollectorRequest)
+            XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"], "Bearer apiKey1")
+        } catch {
+            XCTFail("exception thrown when doing the evaluation: \(error)")
+        }
+    }
+
+    func testBothApiKeyAndCustomHeaders() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            apiKey: "apiKey1",
+            headers: ["X-Custom-Header": "custom-value", "X-Tenant-Id": "tenant-123"]
+        )
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        do {
+            _ = try await goffAPI.postDataCollector(events: events)
+            
+            let dataCollectorRequest = mockService.requests.first { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
+            XCTAssertNotNil(dataCollectorRequest)
+            XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"], "Bearer apiKey1")
+            XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
+            XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Tenant-Id"], "tenant-123")
+        } catch {
+            XCTFail("exception thrown when doing the evaluation: \(error)")
+        }
+    }
+
+    func testCustomHeadersPassedToOfrepProvider() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            headers: ["X-Custom-Header": "custom-value"],
+            networkService: mockService
+        )
+        
+        // Initialize provider which will create OfrepProvider with headers
+        let provider = GoFeatureFlagProvider(options: options)
+        let evaluationCtx = ImmutableContext(targetingKey: "test-user")
+        
+        do {
+            try await provider.initialize(initialContext: evaluationCtx)
+            
+            // Verify that the OFREP bulk evaluation request received the custom headers
+            let bulkEvalRequest = mockService.requests.first { $0.url?.absoluteString.contains("/ofrep/v1/evaluate/flags") ?? false }
+            XCTAssertNotNil(bulkEvalRequest, "Should have made an OFREP bulk evaluation request")
+            XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
+        } catch {
+            XCTFail("exception thrown during initialization: \(error)")
+        }
+    }
 }
