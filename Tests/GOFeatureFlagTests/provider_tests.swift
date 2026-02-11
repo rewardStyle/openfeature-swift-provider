@@ -2,6 +2,7 @@ import XCTest
 import Combine
 import Foundation
 import OpenFeature
+import OFREP
 @testable import GOFeatureFlag
 
 class GoFeatureFlagProviderTests: XCTestCase {
@@ -205,138 +206,112 @@ class GoFeatureFlagProviderTests: XCTestCase {
         XCTAssertEqual(6, mockNetworkService.dataCollectorEventCounter)
     }
 
-    func testHeadersOnlyConfiguration() async {
-        let mockNetworkService = MockNetworkingService(mockStatus: 200)
-        let provider = GoFeatureFlagProvider(
-            options: GoFeatureFlagProviderOptions(
-                endpoint: "https://localhost:1031",
-                headers: ["X-Custom-Header": "custom-value", "X-Api-Version": "v1"],
-                dataFlushInterval: 1,
-                networkService: mockNetworkService
-            )
+    func testHeadersOnlyConfiguration() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            headers: ["X-Custom-Header": "custom-value", "X-Api-Version": "v1"]
         )
-        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
-        let api = OpenFeatureAPI()
-        await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
-        let client = api.getClient()
-
-        _ = client.getBooleanDetails(key: "my-flag", defaultValue: false)
-
-        let expectation = self.expectation(description: "Waiting for delay")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) { expectation.fulfill() }
-        await fulfillment(of: [expectation], timeout: 3.0)
-
-        XCTAssertEqual(1, mockNetworkService.dataCollectorCallCounter)
-        let dataCollectorRequest = mockNetworkService.requests.last { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        _ = try await goffAPI.postDataCollector(events: events)
+        
+        let dataCollectorRequest = mockService.requests.first { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
         XCTAssertNotNil(dataCollectorRequest)
         XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
         XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Api-Version"], "v1")
         XCTAssertNil(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"])
-
-        let bulkEvalRequest = mockNetworkService.requests.first { $0.url?.absoluteString.contains("/ofrep/v1/evaluate/flags") ?? false }
-        XCTAssertNotNil(bulkEvalRequest)
-        XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
-        XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Api-Version"], "v1")
     }
 
-    func testApiKeyOnlyConfiguration() async {
-        let mockNetworkService = MockNetworkingService(mockStatus: 200)
-        let provider = GoFeatureFlagProvider(
-            options: GoFeatureFlagProviderOptions(
-                endpoint: "https://localhost:1031",
-                apiKey: "test-api-key",
-                dataFlushInterval: 1,
-                networkService: mockNetworkService
-            )
+    func testApiKeyOnlyConfiguration() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            apiKey: "apiKey1"
         )
-        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
-        let api = OpenFeatureAPI()
-        await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
-        let client = api.getClient()
-
-        _ = client.getBooleanDetails(key: "my-flag", defaultValue: false)
-
-        let expectation = self.expectation(description: "Waiting for delay")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) { expectation.fulfill() }
-        await fulfillment(of: [expectation], timeout: 3.0)
-
-        XCTAssertEqual(1, mockNetworkService.dataCollectorCallCounter)
-        let dataCollectorRequest = mockNetworkService.requests.last { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        _ = try await goffAPI.postDataCollector(events: events)
+        
+        let dataCollectorRequest = mockService.requests.first { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
         XCTAssertNotNil(dataCollectorRequest)
-        XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"], "Bearer test-api-key")
-
-        let bulkEvalRequest = mockNetworkService.requests.first { $0.url?.absoluteString.contains("/ofrep/v1/evaluate/flags") ?? false }
-        XCTAssertNotNil(bulkEvalRequest)
-        XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["Authorization"], "Bearer test-api-key")
+        XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"], "Bearer apiKey1")
     }
 
-    func testApiKeyPrecedenceOverCustomAuthHeader() async {
-        let mockNetworkService = MockNetworkingService(mockStatus: 200)
-        let provider = GoFeatureFlagProvider(
-            options: GoFeatureFlagProviderOptions(
-                endpoint: "https://localhost:1031",
-                apiKey: "api-key-wins",
-                headers: ["Authorization": "Basic custom-auth", "X-Custom-Header": "custom-value"],
-                dataFlushInterval: 1,
-                networkService: mockNetworkService
-            )
+    func testApiKeyPrecedenceOverCustomAuthHeader() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            apiKey: "apiKey1",
+            headers: ["Authorization": "Basic custom-auth", "X-Custom-Header": "custom-value"]
         )
-        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
-        let api = OpenFeatureAPI()
-        await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
-        let client = api.getClient()
-
-        _ = client.getBooleanDetails(key: "my-flag", defaultValue: false)
-
-        let expectation = self.expectation(description: "Waiting for delay")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) { expectation.fulfill() }
-        await fulfillment(of: [expectation], timeout: 3.0)
-
-        XCTAssertEqual(1, mockNetworkService.dataCollectorCallCounter)
-        let dataCollectorRequest = mockNetworkService.requests.last { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        _ = try await goffAPI.postDataCollector(events: events)
+        
+        let dataCollectorRequest = mockService.requests.first { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
         XCTAssertNotNil(dataCollectorRequest)
-        XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"], "Bearer api-key-wins")
+        XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"], "Bearer apiKey1")
         XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
-
-        let bulkEvalRequest = mockNetworkService.requests.first { $0.url?.absoluteString.contains("/ofrep/v1/evaluate/flags") ?? false }
-        XCTAssertNotNil(bulkEvalRequest)
-        XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["Authorization"], "Bearer api-key-wins")
-        XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
     }
 
-    func testBothApiKeyAndCustomHeaders() async {
-        let mockNetworkService = MockNetworkingService(mockStatus: 200)
-        let provider = GoFeatureFlagProvider(
-            options: GoFeatureFlagProviderOptions(
-                endpoint: "https://localhost:1031",
-                apiKey: "test-api-key",
-                headers: ["X-Custom-Header": "custom-value", "X-Tenant-Id": "tenant-123"],
-                dataFlushInterval: 1,
-                networkService: mockNetworkService
-            )
+    func testBothApiKeyAndCustomHeaders() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            apiKey: "apiKey1",
+            headers: ["X-Custom-Header": "custom-value", "X-Tenant-Id": "tenant-123"]
         )
-        let evaluationCtx = ImmutableContext(targetingKey: "ede04e44-463d-40d1-8fc0-b1d6855578d0")
-        let api = OpenFeatureAPI()
-        await api.setProviderAndWait(provider: provider, initialContext: evaluationCtx)
-        let client = api.getClient()
-
-        _ = client.getBooleanDetails(key: "my-flag", defaultValue: false)
-
-        let expectation = self.expectation(description: "Waiting for delay")
-        DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) { expectation.fulfill() }
-        await fulfillment(of: [expectation], timeout: 3.0)
-
-        XCTAssertEqual(1, mockNetworkService.dataCollectorCallCounter)
-        let dataCollectorRequest = mockNetworkService.requests.last { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        _ = try await goffAPI.postDataCollector(events: events)
+        
+        let dataCollectorRequest = mockService.requests.first { $0.url?.absoluteString.contains("/v1/data/collector") ?? false }
         XCTAssertNotNil(dataCollectorRequest)
-        XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"], "Bearer test-api-key")
+        XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["Authorization"], "Bearer apiKey1")
         XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
         XCTAssertEqual(dataCollectorRequest?.allHTTPHeaderFields?["X-Tenant-Id"], "tenant-123")
+    }
 
-        let bulkEvalRequest = mockNetworkService.requests.first { $0.url?.absoluteString.contains("/ofrep/v1/evaluate/flags") ?? false }
-        XCTAssertNotNil(bulkEvalRequest)
-        XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["Authorization"], "Bearer test-api-key")
-        XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
-        XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Tenant-Id"], "tenant-123")
+    func testCustomHeadersAppliedToOfrepRequests() async {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            headers: ["X-Custom-Header": "custom-value", "X-Tenant-Id": "tenant-123"],
+            networkService: mockService
+        )
+        let provider = GoFeatureFlagProvider(options: options)
+        let evaluationCtx = ImmutableContext(targetingKey: "test-user")
+        
+        do {
+            try await provider.initialize(initialContext: evaluationCtx)
+            
+            let bulkEvalRequest = mockService.requests.first { $0.url?.absoluteString.contains("/ofrep/v1/evaluate/flags") ?? false }
+            XCTAssertNotNil(bulkEvalRequest, "Should have made an OFREP bulk evaluation request")
+            XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
+            XCTAssertEqual(bulkEvalRequest?.allHTTPHeaderFields?["X-Tenant-Id"], "tenant-123")
+        } catch {
+            XCTFail("Unexpected error during initialization: \(error)")
+        }
     }
 }

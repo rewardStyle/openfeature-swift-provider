@@ -203,4 +203,55 @@ class GoffApiTests: XCTestCase {
             XCTFail("Expected GoFeatureFlagError.noEventToSend but got a different error: \(error).")
         }
     }
+
+    func testCustomHeadersAreAppliedToDataCollectorRequest() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            headers: ["X-Custom-Header": "custom-value", "X-Tenant-Id": "tenant-123"]
+        )
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        do {
+            _ = try await goffAPI.postDataCollector(events: events)
+            
+            XCTAssertEqual(mockService.requests.count, 1)
+            let request = mockService.requests[0]
+            XCTAssertEqual(request.allHTTPHeaderFields?["X-Custom-Header"], "custom-value")
+            XCTAssertEqual(request.allHTTPHeaderFields?["X-Tenant-Id"], "tenant-123")
+        } catch {
+            XCTFail("exception thrown when doing the evaluation: \(error)")
+        }
+    }
+
+    func testApiKeyTakesPrecedenceOverCustomAuthorizationHeader() async throws {
+        let mockService = MockNetworkingService(mockStatus: 200)
+        let options = GoFeatureFlagProviderOptions(
+            endpoint: "http://localhost:1031/",
+            apiKey: "apiKey1",
+            headers: ["Authorization": "Basic custom-auth", "X-Custom-Header": "value"]
+        )
+        let goffAPI = GoFeatureFlagAPI(networkingService: mockService, options: options)
+        
+        let events: [FeatureEvent] = [
+            FeatureEvent(kind: "feature", userKey: "test-user", creationDate: Int64(Date().timeIntervalSince1970),
+                         key: "flag-1", variation: "enabled", value: JSONValue.bool(true), default: false, version: nil, source: "PROVIDER_CACHE")
+        ]
+        
+        do {
+            _ = try await goffAPI.postDataCollector(events: events)
+            
+            XCTAssertEqual(mockService.requests.count, 1)
+            let request = mockService.requests[0]
+            XCTAssertEqual(request.allHTTPHeaderFields?["Authorization"], "Bearer apiKey1")
+            XCTAssertEqual(request.allHTTPHeaderFields?["X-Custom-Header"], "value")
+        } catch {
+            XCTFail("exception thrown when doing the evaluation: \(error)")
+        }
+    }
 }
